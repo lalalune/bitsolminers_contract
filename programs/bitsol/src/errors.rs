@@ -36,4 +36,6 @@ pub enum BitSolError {
     RewardAlreadyClaimed,
     #[msg("Reward expired")]
     RewardExpired,
+    #[msg("Reward exceeds remaining supply")]
+    RewardExceedsSupply,
 }

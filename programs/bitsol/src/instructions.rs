@@ -93,8 +93,8 @@ fn settle_and_mint_rewards<'info>(
     player.last_claim_slot = now;
     player.last_acc_bits_per_hash = gs.acc_bits_per_hash;
 
-    // split referral 25% to referrer
-    let referral_amount = pending * 25 / 100;
+    // split referral based on configured fee (per-mille)
+    let referral_amount = pending * gs.referral_fee as u64 / 1000;
     let player_amount = pending - referral_amount;
 
     // signer seeds
@@ -962,6 +962,11 @@ pub fn claim_global_random_reward(ctx: Context<ClaimGlobalRandomReward>) -> Resu
         .any(|r| r.generated_slot == reward.generated_slot);
     require!(!already_claimed, BitSolError::RewardAlreadyClaimed);
 
+    // Ensure reward does not exceed remaining supply
+    let minted_minus_burn = gs.cumulative_rewards.saturating_sub(gs.burned_tokens);
+    let remaining_supply = gs.total_supply.saturating_sub(minted_minus_burn);
+    require!(reward.amount <= remaining_supply, BitSolError::RewardExceedsSupply);
+
     // Mint reward to player
     let seeds = &[
         GLOBAL_STATE_SEED,
@@ -982,6 +987,12 @@ pub fn claim_global_random_reward(ctx: Context<ClaimGlobalRandomReward>) -> Resu
         ),
         reward.amount,
     )?;
+
+    // track supply and clear reward
+    gs.cumulative_rewards = gs
+        .cumulative_rewards
+        .saturating_add(reward.amount);
+    gs.global_random_reward = None;
 
     // Record claim
     let claimed = ClaimedGlobalReward {
